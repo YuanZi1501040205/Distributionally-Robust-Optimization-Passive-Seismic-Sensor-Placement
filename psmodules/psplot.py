@@ -96,7 +96,7 @@ def hseispickplot(Data, Picks, ns, nt, skipt=1, scale=0.5, ucolor='blue', lwidth
                  color=ucolor, linewidth=lwidth)
         plt.plot(Picks[i, 0], 1 + i,
                  marker="o", color="red")
-        plt.hold(True)
+        # plt.hold(True)
         # for a in range(len(trace)):
         #     if (trace[a] < 0):
         #         trace[a] = 0
@@ -188,7 +188,7 @@ def hseisplot(Data, ns, nt, skipt=1, scale=0.5, ucolor='blue', lwidth=1.0, title
         normtrace = trace / maxval[i] * norm[i]
         plt.plot(t, 1 + i + normtrace * scale,
                  color=ucolor, linewidth=lwidth)
-        plt.hold(True)
+        # plt.hold(True)
         # for a in range(len(trace)):
         #     if (trace[a] < 0):
         #         trace[a] = 0
@@ -386,7 +386,7 @@ def wiggleHAll(Data, nt, ns, skipt=1, scale=0.5, ucolor='blue', lwidth=1.0, titl
         normtrace = trace / maxval[i] * norm[i]
         plt.plot(t, 1 + i + normtrace * scale,
                  color=ucolor, linewidth=lwidth)
-        plt.hold(True)
+        # plt.hold(True)
         # for a in range(len(trace)):
         #     if (trace[a] < 0):
         #         trace[a] = 0

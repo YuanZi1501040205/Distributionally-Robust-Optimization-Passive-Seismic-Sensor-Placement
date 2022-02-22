@@ -498,7 +498,7 @@ def raytracing(vp, vs, zlayer, dg, sourcex, sourcey, sourcez, receiverx, receive
     xmax = 20000
     zmin = 0
     zmax = zlayer.max()
-    ndg = (xmax - xmin) / dg + 1
+    ndg = int((xmax - xmin) / dg + 1)
 
     # Make strata layer
     zlayer.shape = (len(zlayer), 1)

@@ -65,8 +65,10 @@ def main():
     # 3D passive seismic raytracing
     print("3D passive seismic raytracing example is running[Waiting...]")
     dg = 10
+    # ptimes, pthetas = psraytrace.raytracing(
+    #     vp_ss103h, vs_ss103h, zlayer_ss103h, dg, sourcex, sourcey, sourcez, geox, geoy, geoz)
     ptimes, pthetas = psraytrace.raytracing(
-        vp_ss103h, vs_ss103h, zlayer_ss103h, dg, sourcex, sourcey, sourcez, geox, geoy, geoz)
+        vp, vs, zlayer, dg, sourcex, sourcey, sourcez, geox, geoy, geoz)
 
     print("3D passive seismic raytracing completed[OK]")
     # print(pthetas)
@@ -93,8 +95,8 @@ def main():
 
     # nt = 62
     # Plot synthetic traces
-    # psplot.hseisplot(syndata, ns, nt)
-    # psplot.vseisplot(syndata, ns, nt)
+    psplot.hseisplot(syndata, ns, nt)
+    psplot.vseisplot(syndata, ns, nt)
 
     # Pick and plot first arrival time of microseismic events
 
@@ -108,8 +110,8 @@ def main():
     pickers.shape = (len(pickers), 1)
 
     # plot pickers
-    # psplot.hseispickplot(syndata, pickers, ns, nt)
-    # psplot.vseispickplot(syndata, pickers, ns, nt)
+    psplot.hseispickplot(syndata, pickers, ns, nt)
+    psplot.vseispickplot(syndata, pickers, ns, nt)
 
     # Locate microseismic event
     x1 = 0
@@ -137,8 +139,10 @@ def main():
             sx = array([i])
             sy = array([j])
             sz = array([3000])
+            # tps, tetas = psraytrace.raytracing(
+            #     vp_ss103h, vs_ss103h, zlayer_ss103h, dg, sx, sy, sz, geox, geoy, geoz)
             tps, tetas = psraytrace.raytracing(
-                vp_ss103h, vs_ss103h, zlayer_ss103h, dg, sx, sy, sz, geox, geoy, geoz)
+                vp, vs, zlayer, dg, sx, sy, sz, geox, geoy, geoz)
             tps = tps / dt
 
             minErr = timediff(tps, pickers)
@@ -151,6 +155,8 @@ def main():
     ind = findIndex(nx, ny, 1, minErrIndex)
 
     print(ind)
+    print('source x: ',  range(x1, x2, dx)[ind[0]])
+    print('source y: ', range(y1, y2, dy)[ind[1]])
 
 
 def timediff(tp, tmp):

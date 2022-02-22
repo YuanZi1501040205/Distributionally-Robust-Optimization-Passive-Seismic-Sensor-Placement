@@ -28,7 +28,7 @@ x = append(xmin, xmax)
 z = concatenate((zlayer, zlayer), axis=1)
 # print(z)
 dg = 10
-ndg = (xmax - xmin) / dg + 1
+ndg = int((xmax - xmin) / dg + 1)
 # print(ndg)
 xx = linspace(xmin, xmax, ndg)
 nx = len(xx)
