@@ -51,8 +51,10 @@ def genSynNoiseFree(ns, nt, wavelet, dip, time, dt, att):
     win = len(wavelet)
 
     for i in range(nt):
-        nstart = floor(time[i, :] / dt)
-        trace = 0.0 - cos(dip[i, :]) * wavelet * att[i]
+        # nstart = floor(time[i, :] / dt)
+        nstart = floor(time[i] / dt)
+        # trace = 0.0 - cos(dip[i, :]) * wavelet * att[i]
+        trace = 0.0 - cos(dip[i]) * wavelet * att[i]
         syn[nstart:nstart + win, i] += trace[:, 0]
 
     return syn

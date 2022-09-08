@@ -1,12 +1,17 @@
-'''
+# -*- coding: utf-8 -*-
 
-# A python module for seismic ray tracing
-#
-# (C) Zhengguang Zhao, 2016
+"""
+Core functions for ray tracing
 
-'''
+@author:     Zhengguang Zhao
+@copyright:  Copyright 2016-2019, Zhengguang Zhao.
+@license:    MIT
+@contact:    zg.zhao@outlook.com
 
-# !/Users/Uqer/anaconda/bin/python
+"""
+
+
+import copy
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,148 +19,93 @@ from math import exp, floor, ceil
 from numpy.lib.scimath import sqrt
 from numpy import array, linspace, ones, zeros, empty, repeat, \
     transpose, diff, where, real, cumsum, append, multiply, \
-    arcsin, finfo, concatenate, square, flipud
+    arcsin, finfo, concatenate, square, flipud, max, ceil
 
 
-def main():
-    """
-    # Executing main() function will run three examples, i.e.
-    # 3D passive seismic raytracing example
-    """
 
-    # 3D passive seismic raytracing
-    print("3D passive seismic raytracing example is running[Waiting...]")
-    zlayer = array([0, 80, 180, 300, 450, 630, 800,
-                    1050, 1200, 1400, 1620, 1820, 2000])
-    dg = 10
-    sourcex = array([3000, 3000])
-    sourcey = array([3000, 3000])
-    sourcez = array([1000, 2000])
+def raytrace(vp, vs, zlayer, dg, src, rcv):
+    #  Input geometry
+    sourcex = src[:,0]
+    sourcey = src[:,1]
+    sourcez = src[:,2]
+    receiverx = rcv[:,0]
+    receivery = rcv[:,1]
+    receiverz = rcv[:,2]
 
-    receiverx = array([300, 600])
-    receivery = array([400, 800])
-    receiverz = array([0, 0])
+    max_x = max(sourcex)
+    max_y = max(sourcey)
+    topright_dis = ceil(sqrt(max_x*max_x + max_y*max_y)) + dg
+    xmin = 0
+    xmax = topright_dis
+    # Make strata layer
+    xx = np.arange(xmin, xmax, dg)
+   
 
     # P wave velocity
-    vp = array([1800, 2000, 2200, 2500, 2400, 2700,
-                3150, 2950, 3440, 3750, 4000, 4350, 4600])
-
-    #  S wave velocity based on Castagna's rule
-    vs = (vp - 1360) / 1.16
-
-    times = raytracing(vp, vs, zlayer, dg, sourcex, sourcey,
-                       sourcez, receiverx, receivery, receiverz)
-    print("One Way Travel Time is :")
-    print(times)
-    print("3D passive seismic raytracing example running completed[OK]")
-
-    # 2D passive seismic raytracing
-    print("2D passive seismic raytracing example is running[Waiting...]")
-
-    # Make strata layer
-    zlayer = array([0, 80, 180, 300, 450, 630, 800,
-                    1050, 1200, 1400, 1620, 1820, 2000])
-    zlayer.shape = (len(zlayer), 1)
-    nlayer = len(zlayer)
-    layer = linspace(1, nlayer, nlayer)
-
-    #  Input geometry
-    xmin = 0
-    xmax = 6000
-    zmin = 0
-    zmax = 2000
-
-    # print(zlayer)
-    thick = abs(diff(zlayer))
-    x = append(xmin, xmax)
-    # print(x)
-    z = concatenate((zlayer, zlayer), axis=1)
-    # print(z)
-    dg = 10
-    ndg = (xmax - xmin) / dg + 1
-    # print(ndg)
-    xx = linspace(xmin, xmax, ndg)
-    nx = len(xx)
-    zz = repeat(zlayer, nx, axis=1)
-    # print(zz.shape)
+    vp = vp.reshape(-1,1)
+    vs = vs.reshape(-1,1)
 
     # Source-Receiver Groups
-    # % Receiver Interval
-    dr = 20
-    # Front Spread Configuration
     # Source
-    xs = array([3000])
-    zs = array([1000])
-    # # dxs = floor((xmax-xmin)/2)
-    # # ndxs = (xmax-xmin)/dxs + 1
-    # # xs = linspace(xmin, xmax, ndxs)
-    # # print(xs)
-    # zs = array([0, 0, 0])
+    zs = sourcez
+    xs = sourcex - sourcex
     ns = len(xs)
     # Receiver
-    xr = array([500])
-    # print(xr)
-    zr = array([0])
-    nr = len(xr)
+    zr = receiverz
+    nr = len(zr)
+    xr = empty((nr, 1), dtype="float32")
+
     nray = ns * nr
 
-    # P wave velocity
-    vp = array([1800, 2000, 2200, 2500, 2400, 2700,
-                3150, 2950, 3440, 3750, 4000, 4350, 4600])
-    vp.shape = (len(vp), 1)
-    #  S wave velocity based on Castagna's rule
-    vs = (vp - 1360) / 1.16
+    times = np.zeros((nray, 1), dtype="float32").flatten()
+    thetas = np.zeros((nray, 1), dtype="float32").flatten()
 
-    #  Draw sources & receivers
-    fig, ax = plt.subplots()
-    cax = ax.pcolor(xx, zz, repeat(vp, nx, axis=1))
-    ax.plot(xs, zs, markersize=10, marker="*", color="black")
-    # plt.hold(True)
-    ax.scatter(xr, zr, s=50,  marker="v", color="red")
-    plt.axis([0, xmax, zmin - 0.03 * zmax, zmax])
-    plt.gca().invert_yaxis()
-    # plt.hold(True)
+    dxList = []
+    dyList = []
+    zhList = []
 
-    # Run Ray Tracing
-
-    # Loop over for number of souce
-    for i in range(ns):
+    # Run Ray tracing
+    # # Loop over for number of souce
+    for i in range(ns):   
+                
         # Loop over for number of receiver
         for j in range(nr):
+            
+            xr[j] = sqrt((sourcex[i] - receiverx[j]) * (sourcex[i] - receiverx[j]) +
+                         (sourcey[i] - receivery[j]) * (sourcey[i] - receivery[j]))
+           
             # Compare zs and zr to determine downgoing or upgoing shooting
             if zs[i] > zr[j]:
                 #  Upgoing path
                 ind = where(zlayer < zs[i])
-                u = array(ind[0])
-                u.shape = (len(u), 1)
+                u = array(ind[0]).reshape(-1)
+               
 
                 if len(u) == 0:
                     eup = len(zlayer)
                 else:
-                    eup = u[len(u) - 1]
-
+                    eup = u[-1]
                 ind = where(zlayer > zr[j])
-                u = array(ind[0])
-                u.shape = (len(u), 1)
+                u = array(ind[0]).reshape(-1)
+               
 
                 if len(u) == 0:
                     sup = len(zlayer)
                 else:
                     sup = u[0]
 
-                eup = eup[0]
-                sup = sup[0]
-
-                if sup > eup:
-                    zu = zr[j]
+                if sup > eup:                    
+                    zu = append(zr[j], zs[i])
+                   
                 elif sup == eup:
                     zuu = append(zr[j], zlayer[sup])
-                    zu = append(zu, zs[i])
-                    zu.shape = (3, 1)
-                else:
-                    zuu = append(zr[j], zlayer[sup:eup + 1])
                     zu = append(zuu, zs[i])
-                    zu.shape = (len(zlayer[sup:eup + 1]) + 2, 1)
+                    
+                else:
+                    zuu = append(zr[j], zlayer[sup:eup+1])
+                    zu = append(zuu, zs[i])
+                    
+                zu = zu.reshape(-1,1)
                 nu = len(zu)
                 zn = flipud(zu)
 
@@ -176,425 +126,6 @@ def main():
                 sx = array([xs[i]])
                 rx = array([xr[j]])
                 # ops=1 for PP mode; ops=2 for PS mode
-                xh, zh, vh, pp, teta, time = shooting(
-                    vpp, vps, zn, xx, sx, rx,  ops)
-                print(time)
-
-            elif zs[i] == zr[j]:
-
-                # Horizontal path
-                ind = where(zlayer < zs[i])
-                h = array(ind[0])
-                h.shape = (len(h), 1)
-
-                if len(h) == 0:
-                    hor = 1
-                else:
-                    hor = h[len(h) - 1]
-
-                zhor = append(zs[i], zr[j])
-                nu = len(zhor)
-                zn = zhor
-
-                # Upgoing elastic parameter
-                vph = vp[hor]
-                vsh = vs[hor]
-
-                # Combine model elastic parameter
-                vpp = vph
-                vps = vsh
-
-                # Start Raytracing(P - P, S - S, or P - S mode)
-                ops = 1
-                # ops = 1 for PP mode, ops = 2 for PS mode
-                sx = array([xs[i]])
-                rx = array([xr[j]])
-                xh, zh, vh, pp, teta, time = directshooting(
-                    vpp, vps, zn, xx, sx, rx, ops)
-                print(time)
-
-            else:
-                # Downgoing path
-                ind = where(zlayer > zs[i])
-                d = array(ind[0])
-                d.shape = (len(d), 1)
-
-                if len(d) == 0:
-                    sdown = len(zlayer)
-                else:
-                    sdown = d[0]
-
-                ind = where(zlayer < zr[j])
-                d = array(ind[0])
-                d.shape = (len(d), 1)
-
-                if len(d) == 0:
-                    edown = len(zlayer)
-                else:
-                    edown = d[len(d) - 1]
-
-                if sdown > edown:
-                    zd = zs[i]
-                elif sdown == edown:
-                    zdd = append(zs[i], zlayer[sdown])
-                    zd = append(zdd, zr[j])
-                    zd.shape = (3, 1)
-                else:
-                    zdd = append(zs[i], zlayer[sdown:edown])
-                    zd = append(zdd, zr[j])
-                    zd.shape = (len(zlayer[sdown:edown]) + 2, 1)
-                nd = len(zd)
-                zn = zd
-
-                # Downgoing elastic parameter
-                if sdown - 1 == edown:
-                    vpd = vp[sdown - 1]
-                    vsd = vs[sdown - 1]
-                else:
-                    vpd = vp[sdown - 1: edown]
-                    vsd = vs[sdown - 1: edown]
-
-                # Combine model elastic parameter
-                vpp = vpd
-                vps = vsd
-
-                # Start Raytracing(P - P, S - S, or P - S mode)
-                ops = 1
-                # ops = 1 for PP mode, ops = 2 for PS mode
-                sx = array([xs[i]])
-                rx = array([xr[j]])
-                xh, zh, vh, pp, teta, time = shooting(
-                    vpp, vps, zn, xx, sx, rx, ops)
-                print(time)
-
-            # Plot Ray
-            if ops == 1:
-                ax.set_title("Seismic Raytracing (P-P mode)")
-                ax.plot(xh, zh, color="black")
-                # plt.hold(True)
-
-    cbar = fig.colorbar(cax, orientation="horizontal")
-    cbar.set_label("Velocity (m/s)")
-
-    # plt.savefig("ref_seis_raytrace_model1.eps", format = "eps")
-    # plt.savefig("ref_seis_raytrace_model1.png", format = "png")
-    plt.show()
-    print("2D passive seismic raytracing example running completed[OK]")
-
-    # # 2D reflection seismic raytracing
-    # print("2D reflection seismic raytracing example is running[Waiting...]")
-    # #  Input geometry
-    # xmin = 0
-    # xmax = 2000
-    # zmin = 0
-    # zmax = 2000
-    # # Make strata layer
-    # zlayer = array([0, 80, 180, 300, 450, 630, 800,
-    #                 1050, 1200, 1400, 1620, 1820, 2000])
-    # zlayer.shape = (len(zlayer), 1)
-    # nlayer = len(zlayer)
-    # layer = linspace(1, nlayer, nlayer)
-    # # print(zlayer)
-    # thick = abs(diff(zlayer))
-    # x = append(xmin, xmax)
-    # # print(x)
-    # z = concatenate((zlayer, zlayer), axis=1)
-    # # print(z)
-    # dg = 10
-    # ndg = (xmax - xmin) / dg + 1
-    # # print(ndg)
-    # xx = linspace(xmin, xmax, ndg)
-    # nx = len(xx)
-    # zz = repeat(zlayer, nx, axis=1)
-    # # print(zz.shape)
-    #
-    # # Source-Receiver Groups
-    # # % Receiver Interval
-    # dr = 20
-    # # Front Spread Configuration
-    # # Source
-    # xs = array([0])
-    # zs = array([0])
-    # # # dxs = floor((xmax-xmin)/2)
-    # # # ndxs = (xmax-xmin)/dxs + 1
-    # # # xs = linspace(xmin, xmax, ndxs)
-    # # # print(xs)
-    # # zs = array([0, 0, 0])
-    # ns = len(xs)
-    # # Receiver
-    # xr = linspace(100, 2000, 10)
-    # # print(xr)
-    # zr = zeros(len(xr))
-    # nr = len(xr)
-    # nray = ns * nr
-    #
-    # # P wave velocity
-    # vp = array([1800, 2000, 2200, 2500, 2400, 2700,
-    #             3150, 2950, 3440, 3750, 4000, 4350, 600])
-    # vp.shape = (len(vp), 1)
-    # #  S wave velocity based on Castagna's rule
-    # vs = (vp - 1360) / 1.16
-    #
-    # #  Draw sources & receivers
-    # fig, ax = plt.subplots()
-    # cax = ax.pcolor(xx, zz, repeat(vp, nx, axis=1))
-    # ax.plot(xs, zs, marker="*", color="black")
-    # # plt.hold(True)
-    # ax.scatter(xr, zr, marker="v", color="red")
-    # # plt.hold(True)
-    #
-    # # Run Ray Tracing
-    #
-    # # Loop over for number of souce
-    # for i in range(ns):
-    #     # Loop over for number of receiver
-    #     for j in range(nr):
-    #         # % Loop over for number of layer
-    #         for k in range(nlayer):
-    #             # print("k= %d" % k)
-    #             #  Declare reflection boundary
-    #             if zr[j] < zlayer[k] and zs[i] < zlayer[k]:
-    #                 zm = zz[k, :]
-    #                 # zf = min(zm) - finfo('float32').eps
-    #                 zf = min(zm) - exp(-10)
-    #                 # print("zf= %f" %zf)
-    #                 # Downgoing path
-    #                 ind = where(zlayer > zs[i])
-    #                 d = array(ind[0])
-    #                 d.shape = (len(d), 1)
-    #                 # print(d)
-    #                 if(len(d) == 0):
-    #                     sdown = len(zlayer)
-    #                 else:
-    #                     sdown = d[0]
-    #                 # print(sdown)
-    #                 ind = where(zlayer > zf)
-    #                 d = array(ind[0])
-    #                 d.shape = (len(d), 1)
-    #                 # print(d)
-    #                 if len(d) == 0:
-    #                     edown = len(zlayer)
-    #                 else:
-    #                     edown = d[0]
-    #                 # print(edown)
-    #
-    #                 if sdown + 1 > edown:
-    #                     zd = zs[i]
-    #                 elif sdown + 1 == edown:
-    #                     zd = append(zs[i], zlayer[sdown])
-    #                     zd.shape = (len(zlayer[sdown]) + 1, 1)
-    #                 else:
-    #                     zd = append(zs[i], zlayer[sdown:edown])
-    #                     zd.shape = (len(zlayer[sdown:edown]) + 1, 1)
-    #                 # print(zd)
-    #                 nd = zd.size
-    #                 # print(nd)
-    #
-    #                 #  Upgoing path
-    #                 ind = where(zlayer > zr[j])
-    #                 u = array(ind[0])
-    #                 u.shape = (len(u), 1)
-    #                 # print(u)
-    #                 if(len(u) == 0):
-    #                     sup = len(zlayer)
-    #                 else:
-    #                     sup = u[0]
-    #                 # print(sup)
-    #                 ind = where(zlayer > zf)
-    #                 u = array(ind[0])
-    #                 u.shape = (len(u), 1)
-    #                 # print(u)
-    #                 if len(u) == 0:
-    #                     eup = len(zlayer)
-    #                 else:
-    #                     eup = u[0]
-    #                 # print(eup)
-    #                 eup = eup[0]
-    #                 sup = sup[0]
-    #
-    #                 if sup + 1 > eup + 1:
-    #                     zu = zr[j]
-    #                 elif sup + 1 == eup + 1:
-    #                     zu = append(zr[j], zlayer[sup])
-    #                     zu.shape = (len(zlayer[sup]) + 1, 1)
-    #                 else:
-    #                     zu = append(zr[j], zlayer[sup:eup + 1])
-    #                     zu.shape = (len(zlayer[sup:eup + 1]) + 1, 1)
-    #                 # print(zu)
-    #                 nu = zu.size
-    #                 # print(nu)
-    #
-    #                 zn = array(append(zd, flipud(zu)))
-    #                 zn.shape = (len(zn), 1)
-    #                 # print(zn)
-    #
-    #
-    #                 print('edown: ', edown)
-    #                 edown = edown[0]
-    #                 sdown = sdown[0]
-    #                 #  Declare elastic parameter
-    #                 #  Downgoing elastic parameter
-    #                 if sdown == edown:
-    #                     vpd = append(vp[sdown - 1], vp[edown - 1])
-    #
-    #                 else:
-    #                     vpd = append(vp[sdown - 1:edown], vp[edown - 1])
-    #                 vpd.shape = (len(vpd), 1)
-    #                 # print(vpd)
-    #
-    #                 #  Upgoing elastic parameter
-    #                 if sup == eup:
-    #                     vpu = array(append(vp[sup - 1], vp[eup - 1]))
-    #
-    #                 else:
-    #                     vpu = array(append(vp[sup - 1:eup], vp[eup - 1]))
-    #                 vpu.shape = (len(vpu), 1)
-    #                 # print(vpu)
-    #
-    #                 #  Combine model elastic parameter
-    #                 vpp = array(append(vpd[0:len(vpd) - 1],
-    #                                    flipud(vpu[0:len(vpu) - 1])))
-    #                 vpp.shape = (len(vpp), 1)
-    #                 # print(vpp)
-    #                 vps = vpp
-    #
-    #                 #  Start Raytracing (P-P, S-S, or P-S mode)
-    #                 ops = 1
-    #                 # ops=1 for PP mode; ops=2 for PS mode
-    #                 sx = array([xs[i]])
-    #                 # print(sx)
-    #                 rx = array([xr[j]])
-    #
-    #                 xh, zh, vh, pp, teta, time = shooting(
-    #                     vpp, vps, zn, xx, sx, rx, ops)
-    #                 print(time)
-    #                 # theta = abs(teta); twt(k,j,i) = time;
-    #
-    #                 # Plot Ray
-    #                 if ops == 1:
-    #                     plt.title("Seismic Raytracing (P-P mode)")
-    #                     plt.plot(xh, zh)
-    #                     # plt.hold(True)
-    #
-    # plt.axis([0, xmax, zmin - 0.03 * zmax, zmax])
-    # plt.gca().invert_yaxis()
-    # cbar = fig.colorbar(cax, orientation="horizontal")
-    # cbar.set_label("Velocity (m/s)")
-    #
-    # # plt.savefig("ref_seis_raytrace_model1.eps", format = "eps")
-    # # plt.savefig("ref_seis_raytrace_model1.png", format = "png")
-    # plt.show()
-    # print("2D reflection seismic raytracing example running completed[OK]")
-
-
-# Functions
-def raytracing(vp, vs, zlayer, dg, sourcex, sourcey, sourcez, receiverx, receivery, receiverz):
-
-    #  Input geometry
-    xmin = 0
-    xmax = 30000
-    zmin = 0
-    zmax = zlayer.max()
-    ndg = int((xmax - xmin) / dg + 1)
-
-    # Make strata layer
-    zlayer.shape = (len(zlayer), 1)
-    nlayer = len(zlayer)
-    layer = linspace(1, nlayer, nlayer)
-
-    thick = abs(diff(zlayer))
-    x = append(xmin, xmax)
-    z = concatenate((zlayer, zlayer), axis=1)
-
-    xx = linspace(xmin, xmax, ndg)
-    nx = len(xx)
-    zz = repeat(zlayer, nx, axis=1)
-
-    # P wave velocity
-    vp.shape = (len(vp), 1)
-    #  S wave velocity based on Castagna's rule
-    # vs = (vp - 1360) / 1.16
-    vs.shape = (len(vs), 1)
-
-    # Source-Receiver Groups
-    # Source
-    zs = sourcez
-    xs = sourcex - sourcex
-    ns = len(xs)
-    # Receiver
-    zr = receiverz
-    # print(zr)
-    nr = len(zr)
-    xr = empty((nr, 1), dtype="float32")
-
-    nray = ns * nr
-
-    times = []
-    thetas = []
-
-    # Run Ray tracing
-    # # Loop over for number of souce
-    for i in range(ns):
-        # Loop over for number of receiver
-        for j in range(nr):
-            xr[j] = sqrt((sourcex[i] - receiverx[j]) * (sourcex[i] - receiverx[j]) +
-                         (sourcey[i] - receivery[j]) * (sourcey[i] - receivery[j]))
-            # print(xr[j])
-            # Compare zs and zr to determine downgoing or upgoing shooting
-            if zs[i] > zr[j]:
-                #  Upgoing path
-                ind = where(zlayer < zs[i])
-                u = array(ind[0])
-                u.shape = (len(u), 1)
-
-                if len(u) == 0:
-                    eup = len(zlayer)
-                else:
-                    eup = u[len(u) - 1]
-
-                ind = where(zlayer > zr[j])
-                u = array(ind[0])
-                u.shape = (len(u), 1)
-
-                if len(u) == 0:
-                    sup = len(zlayer)
-                else:
-                    sup = u[0]
-
-                eup = eup[0]
-                sup = sup[0]
-
-
-                if sup > eup:
-                    zu = zr[j]
-                elif sup == eup:
-                    zuu = append(zr[j], zlayer[sup])
-                    zu = append(zuu, zs[i])
-                    zu.shape = (3, 1)
-                else:
-                    zuu = append(zr[j], zlayer[sup:eup])
-                    zu = append(zuu, zs[i])
-                    zu.shape = (len(zlayer[sup:eup]) + 2, 1)
-                # nu = len(zu)
-                zn = flipud(zu)
-
-                # Upgoing elastic parameter
-                if sup - 1 == eup:
-                    vpu = vp[sup - 1]
-                    vsu = vs[sup - 1]
-                else:
-                    vpu = vp[sup - 1:eup]
-                    vsu = vs[sup - 1:eup]
-
-                # Combine model elastic parameter
-                vpp = flipud(vpu)
-                vps = flipud(vsu)
-
-                # Start Raytracing (P-P, S-S, or P-S mode)
-                ops = 1
-                sx = array([xs[i]])
-                rx = array([xr[j]])
-                # ops=1 for PP mode; ops=2 for PS mode
                 xh, zh, vh, pp, teta, ttime = shooting(
                     vpp, vps, zn, xx, sx, rx,  ops)
                 if xs[i] == xr[j]:
@@ -608,17 +139,17 @@ def raytracing(vp, vs, zlayer, dg, sourcex, sourcey, sourcez, receiverx, receive
 
                 # Horizontal path
                 ind = where(zlayer < zs[i])
-                h = array(ind[0])
-                h.shape = (len(h), 1)
+                h = array(ind[0]).reshape(-1)
+                
 
                 if len(h) == 0:
-                    hor = 1
+                    hor = 0
                 else:
-                    hor = h[len(h) - 1]
+                    hor = h[-1]
 
                 zhor = append(zs[i], zr[j])
                 nu = len(zhor)
-                zn = zhor
+                zn = zhor.reshape(-1,1)
 
                 # Upgoing elastic parameter
                 vph = vp[hor]
@@ -639,8 +170,8 @@ def raytracing(vp, vs, zlayer, dg, sourcex, sourcey, sourcez, receiverx, receive
             else:
                 # Downgoing path
                 ind = where(zlayer > zs[i])
-                d = array(ind[0])
-                d.shape = (len(d), 1)
+                d = array(ind[0]).reshape(-1)
+                
 
                 if len(d) == 0:
                     sdown = len(zlayer)
@@ -648,30 +179,27 @@ def raytracing(vp, vs, zlayer, dg, sourcex, sourcey, sourcez, receiverx, receive
                     sdown = d[0]
 
                 ind = where(zlayer < zr[j])
-                d = array(ind[0])
-                d.shape = (len(d), 1)
-
+                d = array(ind[0]).reshape(-1)
+               
 
                 if len(d) == 0:
                     edown = len(zlayer)
                 else:
-                    edown = d[len(d) - 1]
+                    edown = d[-1]
 
                 if sdown > edown:
-                    zd = zs[i]
+                    zd = append(zs[i], zr[j])
+                    
                 elif sdown == edown:
                     zdd = append(zs[i], zlayer[sdown])
                     zd = append(zdd, zr[j])
-                    zd.shape = (3, 1)
+                    
                 else:
-                    zdd = append(zs[i], zlayer[sdown:edown])
+                    zdd = append(zs[i], zlayer[sdown:edown+1])
                     zd = append(zdd, zr[j])
-                    if type(zlayer[sdown:edown]) == np.int64:
-                        zd.shape = (1 + 2, 1)
-                    else:
-                        zd.shape = (len(zlayer[sdown:edown]) + 2, 1)
-
-                # nd = len(zd)
+                   
+                zd = zd.reshape(-1,1)
+                nd = len(zd)
                 zn = zd
 
                 # Downgoing elastic parameter
@@ -679,8 +207,8 @@ def raytracing(vp, vs, zlayer, dg, sourcex, sourcey, sourcez, receiverx, receive
                     vpd = vp[sdown - 1]
                     vsd = vs[sdown - 1]
                 else:
-                    vpd = vp[sdown - 1: edown]
-                    vsd = vs[sdown - 1: edown]
+                    vpd = vp[sdown - 1: edown + 1]
+                    vsd = vs[sdown - 1: edown + 1]
 
                 # Combine model elastic parameter
                 vpp = vpd
@@ -693,6 +221,7 @@ def raytracing(vp, vs, zlayer, dg, sourcex, sourcey, sourcez, receiverx, receive
                 rx = array([xr[j]])
                 xh, zh, vh, pp, teta, ttime = shooting(
                     vpp, vps, zn, xx, sx, rx, ops)
+                
                 if xs[i] == xr[j]:
                     zv = abs(diff(zn, axis=0))
                     tv = zv / vpp
@@ -701,44 +230,93 @@ def raytracing(vp, vs, zlayer, dg, sourcex, sourcey, sourcez, receiverx, receive
                     ttime = tt[tt_size - 1]
 
             # Store traveltimes and incidence angles
-            # print(time)
-            times.append(ttime)
-            t = array(times, dtype='float32')
-            t.shape = (len(times), 1)
-            thetas.append(abs(teta[len(teta) - 1]))
-            teta = array(thetas, dtype='float32')
-            teta.shape = (len(thetas), 1)
+ 
+            times[i * nr + j] = ttime
+            thetas[i * nr + j] = abs(teta[len(teta) - 1])
 
-    return t, teta
+
+            # Plot Ray
+            
+            L = sqrt((sourcex[i] - receiverx[j]) * (sourcex[i] - receiverx[j]) + (sourcey[i] - receivery[j]) * (sourcey[i] - receivery[j]))
+            X = sourcex[i] - receiverx[j]
+            Y = sourcey[i] - receivery[j]
+
+            
+            if L == 0.0:
+                L = 1
+
+            if X <= 0:
+                dx = sourcex[i] + xh/L * abs(X)
+            else:
+                dx = sourcex[i] - xh/L * abs(X)
+            
+            
+            if Y <= 0:
+                dy = sourcey[i] + xh/L * abs(Y)
+            else:
+                dy = sourcey[i] - xh/L * abs(Y)
+
+            dxList.extend(copy.deepcopy(dx.flatten()))
+            dyList.extend(copy.deepcopy(dy.flatten()))
+            zhList.extend(copy.deepcopy(zh.flatten()))
+            
+    
+    rays = np.array(dxList+dyList+zhList).reshape(3,-1)                 
+                
+                
+
+    return times, rays, thetas
 
 
 def directshooting(vpp, vps, zn, xx, xs, xr, ops):
     # Horizontal path
     if xs < xr:
-        xh = [xs, xr]
+        xh = np.array([xs[0], xr[0]])
     else:
-        xh = [xr, xs]
+        xh = np.array([xr[0], xs[0]])
 
     zh = zn
     vh = vpp
-    teta = 0.0
+    teta = np.array([0.0])
+    
 
     if ops == 1:
         pp = 1 / vpp
-        time = abs(xs - xr) / vpp
+        time = abs(np.diff(xh)) / vpp[0]
     else:
         pp = 1 / vps
-        time = abs(xs - xr) / vps
+        time = abs(np.diff(xh)) / vps[0]
 
-    return xh, zh, vh, pp, teta, time
+    return xh, zh, vh, pp, teta, time[0]
+
+
+def verticalshooting(vpp, vps, zn, xx, xs, xr, ops):
+    # Horizontal path
+    if xs < xr:
+        xh = np.array([xs[0], xr[0]])
+    else:
+        xh = np.array([xr[0], xs[0]])
+
+    zh = zn
+    vh = vpp
+    teta = np.array([0.0])
+    
+
+    if ops == 1:
+        pp = 1 / vpp
+        time = abs(np.diff(xh)) / vpp[0]
+    else:
+        pp = 1 / vps
+        time = abs(np.diff(xh)) / vps[0]
+
+    return xh, zh, vh, pp, teta, time[0]
 
 
 def shooting(vpp, vps, zn, xx, xs, xr, ops):
     # some constants
     itermax = 50
-    offset = abs(xs - xr)
-    print("offset:")
-    print(len(offset))
+    offset = abs(xs.reshape(-1) - xr.reshape(-1))
+    
     xc = 10
 
     # determin option
@@ -748,103 +326,89 @@ def shooting(vpp, vps, zn, xx, xs, xr, ops):
         vh = vps
 
     # initial guess of the depth & time
-    zh = zn - finfo("float32").eps
-    # zh = zn - exp(-10)
-    # print("zh:")
-    # print(zh)
+    zh = zn - finfo("float32").eps 
+  
+    
     t = float("inf") * ones((len(offset),), dtype=np.float32)
     # t = exp(100) * ones((len(offset),), dtype=np.float32)
-    # print (t)
+    
     p = float("inf") * ones((len(offset),), dtype=np.float32)
     # p = exp(100) * ones((len(offset),), dtype=np.float32)
 
     # start raytracing
     # trial shooting
-    pmax = 1 / min(vh)
-    # print("pmax= %10.9f" %(pmax))
-    pp = np.linspace(0, 1 / max(vh), len(xx))
-    pp.shape = (1, len(pp))
-    print("pp: ")
-    print (pp)
-
-    if type(zh) == np.float64:
-        sln = vh[0:1] * pp  # - exp(-20)
-        vel = vh[0:1 - 1] * ones((1, len(pp)))
+    pmax = 1 / min(vh)   
+    pp = np.linspace(0, 1 / max(vh), len(xx)).reshape(1,-1)    
+    temp = np.array(vh[0:len(zh)]).reshape(-1,1)   
+    sln = temp.dot(pp) - exp(-20)
+  
+    vel = temp.dot(ones((1, np.size(pp,1)), dtype= np.float32)) # a.dot(b) matrix multiply
+ 
+   
+    if len(zh) >2:
+        dz = np.array(abs(diff(zh, axis=0))).dot(ones((1, np.size(pp,1))))
+    elif len(zh) == 2:
+        temp1 = np.array(abs(diff(zh, axis=0))).reshape(-1,1)
+        
+        dz = temp1.dot(ones((1, np.size(pp,1))))
     else:
-        sln = vh[0:len(zh)] * pp  # - exp(-20)
-        vel = vh[0:len(zh) - 1] * ones((1, len(pp)))
-    print("sln: ")
-    print(sln)
-
-
-    # vel = vh[0:len(zh) - 1] * ones((1, len(pp)))
-
-    print ("vel: ")
-    print(vel)
-    dz = abs(diff(zh, axis=0)) * ones((1, len(pp)))
-    print("dz:")
-    print (dz.size)
+        temp2 = np.array(abs(zh)).reshape(-1,1)
+        
+        dz = temp2.dot(ones((1, np.size(pp,1))))
+    
+    
     dim_sln = sln.shape
-    print("dim_sln:")
-    print (dim_sln)
+    
     if (dim_sln[0] > 1):
-        xn = sum((dz * sln) / sqrt(1 - sln**2))
-        print("xn:")
-        print(xn)
-        tt = sum(dz / (vel * sqrt(1 - sln**2)))
-        print("tt:")
-        print(tt)
+        xn = np.sum((dz * sln) / sqrt(1 - sln**2), axis=0) # need to assign axis
+       
+        tt = np.sum(dz / (vel * sqrt(1 - sln**2)), axis=0)
+        
     else:
-        xn = (dz * sln) / sqrt(1 - sln**2)
-        tt = dz / (vel * sqrt(1 - sln**2))
-    xn.shape = (1, len(xn))
-    tt.shape = (1, len(tt))
+        xn =(dz * sln) / sqrt(1 - sln**2) # a * b element-wise multiply
+        tt = dz / (vel * sqrt(1 - sln**2)) # a / b element-wise divide
+ 
+    
+    if xn.ndim>1:
+        xn = xn[0,:]
+        tt = tt[0,:]
+    pp = pp[0,:]
 
-    # print(xn.shape)
+    
     xmax = xn.max()
-    # print("xmax= %f" %(xmax))
+   
 
     # bisection method
     # start bisection method
 
     for k in range(len(offset)):
-        # print("k= %d" %k)
+        
         # analyze the radius of target
-        n = xn.size
-        # print("n= %d" %n)
-        xa = xn[:, 0:n - 1]
-        # print("xa:")
-        # print(xa.shape)
-        xb = xn[:, 1:n]
-        # print("xb:")
-        # print(xb)
-        opt1 = empty((1, n - 1))
-        opt2 = empty((1, n - 1))
-        opt = empty((1, n - 1))
+        n = len(xn)        
+        xa = xn[0:n - 1].flatten()       
+        xb = xn[1:n].flatten()
+       
+        opt1 = empty((1, n - 1)).flatten()
+        opt2 = empty((1, n - 1)).flatten()
+        opt = empty((1, n - 1)).flatten()
         for i in range(n - 1):
-            if xa[:, i] <= offset[k] and xb[:, i] > offset[k]:
-                opt1[:, i] = 1
+            if xa[i] <= offset[k] and xb[i] > offset[k]:
+                opt1[i] = 1
             else:
-                opt1[:, i] = 0
+                opt1[i] = 0
 
-            if xa[:, i] >= offset[k] and xb[:, i] < offset[k]:
-                opt2[:, i] = 1
+            if xa[i] >= offset[k] and xb[i] < offset[k]:
+                opt2[i] = 1
             else:
-                opt2[:, i] = 0
+                opt2[i] = 0
 
-        opt = opt1 + opt2
-        # print("opt1:")
-        # print(opt1)
-        # print("opt2:")
-        # print(opt2)
-        # print("opt:")
-        # print(opt.shape)
+        opt = opt1 + opt2      
 
-        index = where(opt == 1)
-        ind = index[1]
-        # print (ind)
-        # print("ind= %d" %ind)
-        if len(index) == 0:
+        
+        ind = where(opt == 1)
+
+      
+        if len(ind) == 0:
             if (offset(k) >= xmax):
                 a = n
                 b = []
@@ -852,22 +416,22 @@ def shooting(vpp, vps, zn, xx, xs, xr, ops):
                 a = []
                 b = 1
         else:
-            a = ind
-            b = ind + 1
-        # print(type(a))
-        x1 = xn[:, a][0, 0]
-        x2 = xn[:, b][0, 0]
-        t1 = tt[:, a][0, 0]
-        t2 = tt[:, b][0, 0]
-        p1 = pp[:, a][0, 0]
-        p2 = pp[:, b][0, 0]
+            a = ind[0]
+            b = ind[0] + 1
+       
+
+        x1 = xn[a]
+        x2 = xn[b]
+        t1 = tt[a]
+        t2 = tt[b]
+        p1 = pp[a]
+        p2 = pp[b]
         iter = 0
         err = (b - a) / 2
-        # print("err= %f" %err)
-
-        # while((iter < itermax) and (abs(err)<1)):
+        
+        # Minimize the error & intersect the reflector        
         while((iter < itermax) and abs(err) < 1):
-            # print(iter)
+            
             iter = iter + 1
             xt1 = abs(offset[k] - x1)
             xt2 = abs(offset[k] - x2)
@@ -885,93 +449,84 @@ def shooting(vpp, vps, zn, xx, xs, xr, ops):
             elif b.size == 0:
                 p1 = p2
                 p2 = pmax
-            # print ("p1= %f  p2= %f" %(p1, p2))
+           
             pnew = linspace(array([p1, p2]).min(), array([p1, p2]).max(), 3)
-            pnew.shape = (1, len(pnew))
-            # print("pnew:")
-            # print (pnew)
+            pnew = pnew.reshape(1,-1)
+            pnew2 = (pnew[:, 1]).reshape(1,1)
+            
+           
 
             # do shooting by new ray parameter
-            sln = vh[0:len(zh)] * pnew[:, 1]
-            # print("sln:")
-            # print(sln)
-            vel = vh[0:len(zh)] * ones((1, 1))
-            # print("vel:")
-            # print(vel)
-            dz = abs(diff(zh, axis=0)) * ones((1, 1))
-            # print("dz:")
-            # print (dz)
+            temp = np.array(vh[0:len(zh)]).reshape(-1,1)
+                        
+            sln = temp.dot(pnew2) 
+            
+            
+            vel = temp.dot(ones((1, len(pnew2)))) # a.dot(b) matrix multiply
+            
+           
+            if len(zh) >2:
+                dz = np.array(abs(diff(zh, axis=0))).dot(ones((1, len(pnew2))))
+            elif len(zh) == 2:
+                temp1 = (abs(diff(zh, axis=0))).reshape(1,1)                
+                dz = temp1.dot(ones((1, len(pnew2))))
+            else:
+                temp2 = (abs(zh)).reshape(1,1)
+                
+                dz = temp2.dot(ones((1, len(pnew2))))
+            
+            
             dim_sln = sln.shape
-            # print("dim_sln:")
-            # print (dim_sln)
+            
             if (dim_sln[0] > 1):
-                xtemp = sum((dz * sln) / sqrt(1 - sln**2))
-                # print("xn:")
-                # print(xn)
+                xtemp = sum((dz * sln) / sqrt(1 - sln**2))                
                 ttemp = sum(dz / (vel * sqrt(1 - sln**2)))
-                # print("tt:")
-                # print(tt)
+                
             else:
                 xtemp = (dz * sln) / sqrt(1 - sln**2)
                 ttemp = dz / (vel * sqrt(1 - sln**2))
-            xnew = array([x1, xtemp, x2])
-            xnew.shape = (1, len(xnew))
-
-            # print("xnew: ")
-            # print(xnew)
-            tnew = array([t1, ttemp, t2])
-            tnew.shape = (1, len(tnew))
-            # tnew = [t1, ttemp, t2]
-            # print(tnew)
+            xnew = array([x1, xtemp[0], x2], dtype=object).flatten()
+            tnew = array([t1, ttemp, t2]).flatten()
+            
+          
             xmax = xnew.max()
-            # print("xmax= %f" %xmax)
-
+          
             # analyze the radius of target
-            n = xnew.size
-            # print("n= %d" %n)
-            xa = xnew[:, 0:n - 1]
-            # print("xa:")
-            # print(xa)
-            xb = xnew[:, 1:n]
-            # print("xb:")
-            # print(xb)
-            opt1 = empty((1, n - 1))
-            opt2 = empty((1, n - 1))
-            opt = empty((1, n - 1))
+            n = len(xnew)           
+            xa = xnew[0:n - 1]          
+            xb = xnew[1:n]
+          
+            opt1 = empty((1, n - 1)).flatten()
+            opt2 = empty((1, n - 1)).flatten()
+            opt = empty((1, n - 1)).flatten()
 
             for i in range(n - 1):
-                # print("i= %d" %i)
-                # print(offset[k])
-                if xa[:, i] <= offset[k] and xb[:, i] > offset[k]:
-                    opt1[:, i] = 1
+                
+                if xa[i] <= offset[k] and xb[i] > offset[k]:
+                    opt1[i] = 1
                 else:
-                    opt1[:, i] = 0
-                if xa[:, i] >= offset[k] and xb[:, i] < offset[k]:
-                    opt2[:, i] = 1
+                    opt1[i] = 0
+                if xa[i] >= offset[k] and xb[i] < offset[k]:
+                    opt2[i] = 1
                 else:
-                    opt2[:, i] = 0
+                    opt2[i] = 0
 
-            opt = opt1 + opt2
-            # print("opt1:")
-            # print(opt1)
-            # print("opt2:")
-            # print(opt2)
-            # print("opt:")
-            # print(opt.shape)
-
-            index = where(opt == 1)
-            ind = index[1]
-            # print (ind)
-
-            a = ind
-            b = ind + 1
-            x1 = xnew[:, a][0, 0]
-            x2 = xnew[:, b][0, 0]
-            # print(tnew)
-            t1 = tnew[:, a][0, 0]
-            t2 = tnew[:, b][0, 0]
-            p1 = pnew[:, a][0, 0]
-            p2 = pnew[:, b][0, 0]
+            opt = opt1 + opt2            
+            
+            ind = where(opt == 1)            
+            
+            a = ind[0]
+            b = ind[0] + 1
+            
+            pnew = pnew[0]            
+            
+            x1 = xnew[a]
+            x2 = xnew[b]
+           
+            t1 = tnew[a]
+            t2 = tnew[b]
+            p1 = pnew[a]
+            p2 = pnew[b]
             err = (b - a) / 2
 
             # declare ray parameter
@@ -981,28 +536,21 @@ def shooting(vpp, vps, zn, xx, xs, xr, ops):
                 pp = -p
             # compute travel time & angle
             dx = real((pp * vh * dz) / sqrt(1 - pp * pp * vh * vh))
-            # print("dx:")
-            # print(dx)
+           
             xx = xs + cumsum(dx)
-            # print("xx:")
-            # print(xx)
-            xh = (append(xs, xx)).reshape(xs.size + xx.size, 1)
-            # print ("xh:")
-            # print(xh)
+           
+            xh = append(xs, xx)
+            xh.reshape(-1,1)
+           
             dz = real(dx * sqrt(1 - pp * pp * vh * vh)) / (pp * vh)
             dt = dz / (vh * sqrt(1 - pp * pp * vh * vh))
             tt = cumsum(dt)
             tt_size = tt.size
             time = tt[tt_size - 1]
-            # print("time= %f" %time)
+        
 
             teta = real(arcsin(multiply(pp, vh)))
-            # print("teta:")
-            # print(teta)
-
+          
+    
     return xh, zh, vh, pp, teta, time
 
-
-# This will actually run the code if called stand-alone:
-if __name__ == '__main__':
-    main()
