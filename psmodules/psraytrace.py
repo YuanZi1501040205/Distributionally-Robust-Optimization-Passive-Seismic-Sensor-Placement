@@ -20,10 +20,7 @@ from numpy import array, linspace, ones, zeros, empty, repeat, \
 def main():
     """
     # Executing main() function will run three examples, i.e.
-    # 2D passive seismic rayracing example
     # 3D passive seismic raytracing example
-    # 2D reflection Seismic raytracing example
-
     """
 
     # 3D passive seismic raytracing
@@ -495,7 +492,7 @@ def raytracing(vp, vs, zlayer, dg, sourcex, sourcey, sourcez, receiverx, receive
 
     #  Input geometry
     xmin = 0
-    xmax = 20000
+    xmax = 30000
     zmin = 0
     zmax = zlayer.max()
     ndg = int((xmax - xmin) / dg + 1)
@@ -567,18 +564,18 @@ def raytracing(vp, vs, zlayer, dg, sourcex, sourcey, sourcez, receiverx, receive
                 eup = eup[0]
                 sup = sup[0]
 
+
                 if sup > eup:
                     zu = zr[j]
                 elif sup == eup:
                     zuu = append(zr[j], zlayer[sup])
-                    zu = append(zu, zs[i])
+                    zu = append(zuu, zs[i])
                     zu.shape = (3, 1)
                 else:
-
                     zuu = append(zr[j], zlayer[sup:eup])
                     zu = append(zuu, zs[i])
                     zu.shape = (len(zlayer[sup:eup]) + 2, 1)
-                nu = len(zu)
+                # nu = len(zu)
                 zn = flipud(zu)
 
                 # Upgoing elastic parameter
@@ -654,6 +651,7 @@ def raytracing(vp, vs, zlayer, dg, sourcex, sourcey, sourcez, receiverx, receive
                 d = array(ind[0])
                 d.shape = (len(d), 1)
 
+
                 if len(d) == 0:
                     edown = len(zlayer)
                 else:
@@ -668,8 +666,12 @@ def raytracing(vp, vs, zlayer, dg, sourcex, sourcey, sourcez, receiverx, receive
                 else:
                     zdd = append(zs[i], zlayer[sdown:edown])
                     zd = append(zdd, zr[j])
-                    zd.shape = (len(zlayer[sdown:edown]) + 2, 1)
-                nd = len(zd)
+                    if type(zlayer[sdown:edown]) == np.int64:
+                        zd.shape = (1 + 2, 1)
+                    else:
+                        zd.shape = (len(zlayer[sdown:edown]) + 2, 1)
+
+                # nd = len(zd)
                 zn = zd
 
                 # Downgoing elastic parameter
@@ -735,8 +737,8 @@ def shooting(vpp, vps, zn, xx, xs, xr, ops):
     # some constants
     itermax = 50
     offset = abs(xs - xr)
-    # print("offset:")
-    # print(len(offset))
+    print("offset:")
+    print(len(offset))
     xc = 10
 
     # determin option
@@ -762,28 +764,36 @@ def shooting(vpp, vps, zn, xx, xs, xr, ops):
     # print("pmax= %10.9f" %(pmax))
     pp = np.linspace(0, 1 / max(vh), len(xx))
     pp.shape = (1, len(pp))
-    # print("pp: ")
-    # print (pp)
+    print("pp: ")
+    print (pp)
 
-    sln = vh[0:len(zh)] * pp  # - exp(-20)
-    # print("sln: ")
-    # print(sln)
-    vel = vh[0:len(zh) - 1] * ones((1, len(pp)))
-    # print ("vel: ")
-    # print(vel)
+    if type(zh) == np.float64:
+        sln = vh[0:1] * pp  # - exp(-20)
+        vel = vh[0:1 - 1] * ones((1, len(pp)))
+    else:
+        sln = vh[0:len(zh)] * pp  # - exp(-20)
+        vel = vh[0:len(zh) - 1] * ones((1, len(pp)))
+    print("sln: ")
+    print(sln)
+
+
+    # vel = vh[0:len(zh) - 1] * ones((1, len(pp)))
+
+    print ("vel: ")
+    print(vel)
     dz = abs(diff(zh, axis=0)) * ones((1, len(pp)))
-    # print("dz:")
-    # print (dz.size)
+    print("dz:")
+    print (dz.size)
     dim_sln = sln.shape
-    # print("dim_sln:")
-    # print (dim_sln)
+    print("dim_sln:")
+    print (dim_sln)
     if (dim_sln[0] > 1):
         xn = sum((dz * sln) / sqrt(1 - sln**2))
-        # print("xn:")
-        # print(xn)
+        print("xn:")
+        print(xn)
         tt = sum(dz / (vel * sqrt(1 - sln**2)))
-        # print("tt:")
-        # print(tt)
+        print("tt:")
+        print(tt)
     else:
         xn = (dz * sln) / sqrt(1 - sln**2)
         tt = dz / (vel * sqrt(1 - sln**2))

@@ -25,6 +25,7 @@ geox, geoy, geoz = psarray.gridarray(49, 6000, 6000)
 # geoy = linspace(0, 0, 31)
 # geoz = geoy + 2.0
 nt = len(geox)
+# %%
 
 # Define source coordinates
 sourcex = array([3000])
@@ -58,6 +59,7 @@ ptimes, pthetas = psraytrace.raytracing(
     vp_ss103h, vs_ss103h, zlayer_ss103h, dg, sourcex, sourcey, sourcez, geox, geoy, geoz)
 
 print("3D passive seismic raytracing completed[OK]")
+# %%
 # print(pthetas)
 # print("Trave times:")
 # print(ptimes)
@@ -79,8 +81,8 @@ data = zeros((ns, nt), dtype='float32')
 att = ones((nt, 1), dtype='float32')
 syndata = pssynthetic.genSynNoiseFree(
     ns, nt, osciwlet, pthetas, ptimes, dt, att)
-
-
+print('Generate completed')
+# %%
 # nt = 62
 # Plot synthetic traces
 # psplot.hseisplot(syndata, ns, nt)
@@ -97,7 +99,8 @@ for i in range(nt):
     pics.append(pic)
 pickers = array(pics, dtype='float32')
 pickers.shape = (len(pickers), 1)
-
+print('Pick complete')
+# %%
 # plot pickers
 # psplot.hseispickplot(syndata, pickers, ns, nt)
 # psplot.vseispickplot(syndata, pickers, ns, nt)
@@ -148,10 +151,12 @@ else:
     savetxt('pdf_49.txt', pdfvalues, fmt='%.18e')
     print("PDF calculation successfully completed[OK]")
 
-
+# %%
 # Display pdf values
 fig, ax = plt.subplots()
 im = ax.imshow(pdfvalues, cmap=plt.get_cmap('jet'), interpolation='nearest',
                vmin=0, vmax=1)
 fig.colorbar(im)
 plt.show()
+# %%
+

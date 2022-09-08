@@ -152,3 +152,4 @@ im = ax.imshow(pdfvalues, cmap=plt.get_cmap('jet'), interpolation='nearest',
                vmin=0, vmax=1)
 fig.colorbar(im)
 plt.show()
+# %%

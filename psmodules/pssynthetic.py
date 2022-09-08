@@ -37,6 +37,8 @@ def main():
 def genSynNoiseFree(ns, nt, wavelet, dip, time, dt, att):
     """
     generate synthetic seismogram
+    ns: number of sampling: 2ms
+    nt: number of geophones
     data = trace data of a certain number of samples
     wavelet = wavelet used for synthetic data
     dip = dip angle vector for each source-receiver pair

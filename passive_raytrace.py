@@ -240,3 +240,4 @@ cbar.set_label("Velocity (m/s)")
 # plt.savefig("ref_seis_raytrace_model1.eps", format = "eps")
 # plt.savefig("ref_seis_raytrace_model1.png", format = "png")
 plt.show()
+# %%
